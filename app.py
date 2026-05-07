@@ -1,275 +1,244 @@
-from fastapi import FastAPI
+import streamlit as st
 import pandas as pd
-import numpy as np
-import joblib
+import requests
+import matplotlib.pyplot as plt
 
-# ------------------------------------------
-# FASTAPI APP
-# ------------------------------------------
+# ----------------------------------
+# PAGE CONFIG
+# ----------------------------------
 
-app = FastAPI(
-
-    title="AI Forecasting API",
-
-    description="Time Series Forecasting Backend Service",
-
-    version="1.0"
-
+st.set_page_config(
+    page_title="Forecast Dashboard",
+    layout="wide"
 )
 
-# ------------------------------------------
-# LOAD MODEL
-# ------------------------------------------
-
-# Load trained XGBoost model
-model = joblib.load("best_model.pkl")
-
-# ------------------------------------------
-# LOAD DATASET
-# ------------------------------------------
+# ----------------------------------
+# LOAD DATA
+# ----------------------------------
 
 df = pd.read_csv("Forecasting.csv")
 
-# Convert column names to lowercase
 df.columns = df.columns.str.lower()
 
-# Convert date column safely
+# Convert date safely
 df['date'] = pd.to_datetime(
     df['date'],
     errors='coerce'
 )
 
-# Remove invalid dates
 df = df.dropna(subset=['date'])
 
-# ------------------------------------------
-# HOME ROUTE
-# ------------------------------------------
+# ----------------------------------
+# STATES
+# ----------------------------------
 
-@app.get("/")
-def home():
+states = sorted(df['state'].unique())
 
-    return {
+# ----------------------------------
+# TITLE
+# ----------------------------------
 
-        "message": "AI Forecasting API Running Successfully"
+st.title("📈 AI Forecast Dashboard")
 
-    }
+st.markdown("---")
 
-# ------------------------------------------
-# FORECAST ROUTE
-# ------------------------------------------
+# ----------------------------------
+# SIDEBAR
+# ----------------------------------
 
-@app.get("/forecast/{state}")
-def forecast(state: str):
+selected_state = st.sidebar.selectbox(
+    "Select State",
+    states
+)
 
-    # ------------------------------------------
-    # FILTER STATE DATA
-    # ------------------------------------------
+generate = st.sidebar.button(
+    "Generate Forecast"
+)
 
-    state_data = df[
-        df['state'] == state
-    ]
+# ----------------------------------
+# FILTER DATA
+# ----------------------------------
 
-    # If state not found
-    if len(state_data) == 0:
+state_data = df[
+    df['state'] == selected_state
+]
 
-        return {
+# Group data
+state_data = state_data.groupby(
+    'date'
+)['total'].sum().reset_index()
 
-            "error": f"No data found for {state}"
+# ----------------------------------
+# HISTORICAL GRAPH
+# ----------------------------------
 
-        }
+st.subheader(
+    f"Historical Sales - {selected_state}"
+)
 
-    # ------------------------------------------
-    # GET LATEST VALUES
-    # ------------------------------------------
+fig, ax = plt.subplots(figsize=(12,5))
 
-    latest_sales = float(
-        state_data['total'].iloc[-1]
+ax.plot(
+    state_data['date'],
+    state_data['total']
+)
+
+ax.set_xlabel("Date")
+
+ax.set_ylabel("Sales")
+
+ax.grid(True)
+
+st.pyplot(fig)
+
+# ----------------------------------
+# FORECAST
+# ----------------------------------
+
+if generate:
+
+    url = (
+        f"http://127.0.0.1:8000/"
+        f"forecast/{selected_state}"
     )
 
-    rolling_mean = float(
-        state_data['total'].rolling(7).mean().iloc[-1]
+    response = requests.get(url)
+
+    data = response.json()
+
+    # ----------------------------------
+    # BEST MODEL
+    # ----------------------------------
+
+    st.success(
+        f"Best Model: "
+        f"{data['best_model']}"
     )
 
-    rolling_std = float(
-        state_data['total'].rolling(7).std().iloc[-1]
-    )
+    # ----------------------------------
+    # MODEL COMPARISON
+    # ----------------------------------
 
-    # Fill NaN if dataset small
-    if np.isnan(rolling_mean):
+    metrics = data['metrics']
 
-        rolling_mean = latest_sales
+    comparison_df = pd.DataFrame({
 
-    if np.isnan(rolling_std):
+        'Model': list(metrics.keys()),
 
-        rolling_std = 0
+        'RMSE': [
 
-    # ------------------------------------------
-    # CREATE INPUT FEATURES
-    # ------------------------------------------
+            metrics[m]['RMSE']
 
-    sample_data = pd.DataFrame({
+            for m in metrics
 
-        'lag_1': [latest_sales],
+        ],
 
-        'lag_7': [latest_sales],
+        'MAE': [
 
-        'lag_30': [latest_sales],
+            metrics[m]['MAE']
 
-        'rolling_mean_7': [rolling_mean],
+            for m in metrics
 
-        'rolling_std_7': [rolling_std],
-
-        'day_of_week': [2],
-
-        'month': [5],
-
-        'holiday_flag': [0]
+        ]
 
     })
 
-    # ------------------------------------------
-    # MODEL PREDICTION
-    # ------------------------------------------
-
-    prediction = model.predict(
-        sample_data
+    st.subheader(
+        "Model Comparison"
     )
 
-    base_value = float(
-        prediction[0]
+    st.dataframe(
+        comparison_df,
+        use_container_width=True
     )
 
-    # ------------------------------------------
-    # FORECAST DAYS
-    # ------------------------------------------
+    # ----------------------------------
+    # RMSE GRAPH
+    # ----------------------------------
 
-    forecast_days = 56
+    fig2, ax2 = plt.subplots(figsize=(8,4))
 
-    # ------------------------------------------
-    # GENERATE MODEL FORECASTS
-    # ------------------------------------------
-
-    sarima_forecast = [
-
-        round(
-            base_value + np.random.randint(-20, 20),
-            2
-        )
-
-        for i in range(forecast_days)
-
-    ]
-
-    prophet_forecast = [
-
-        round(
-            base_value + np.random.randint(-15, 15),
-            2
-        )
-
-        for i in range(forecast_days)
-
-    ]
-
-    xgboost_forecast = [
-
-        round(
-            base_value + np.random.randint(-10, 10),
-            2
-        )
-
-        for i in range(forecast_days)
-
-    ]
-
-    lstm_forecast = [
-
-        round(
-            base_value + np.random.randint(-12, 12),
-            2
-        )
-
-        for i in range(forecast_days)
-
-    ]
-
-    # ------------------------------------------
-    # MODEL METRICS
-    # ------------------------------------------
-
-    metrics = {
-
-        "SARIMA": {
-
-            "RMSE": 24.5,
-
-            "MAE": 20.1
-
-        },
-
-        "Prophet": {
-
-            "RMSE": 18.2,
-
-            "MAE": 15.7
-
-        },
-
-        "XGBoost": {
-
-            "RMSE": 11.4,
-
-            "MAE": 9.8
-
-        },
-
-        "LSTM": {
-
-            "RMSE": 14.9,
-
-            "MAE": 12.5
-
-        }
-
-    }
-
-    # ------------------------------------------
-    # SELECT BEST MODEL
-    # ------------------------------------------
-
-    best_model = min(
-
-        metrics,
-
-        key=lambda x: metrics[x]['RMSE']
-
+    ax2.bar(
+        comparison_df['Model'],
+        comparison_df['RMSE']
     )
 
-    # ------------------------------------------
-    # RETURN RESPONSE
-    # ------------------------------------------
+    ax2.set_title("RMSE Comparison")
 
-    return {
+    st.pyplot(fig2)
 
-        "state": state,
+    # ----------------------------------
+    # FORECAST GRAPH
+    # ----------------------------------
 
-        "forecast_days": forecast_days,
+    forecasts = data['forecasts']
 
-        "best_model": best_model,
+    forecast_df = pd.DataFrame({
 
-        "metrics": metrics,
+        'Day': range(
+            1,
+            len(
+                forecasts['XGBoost']
+            ) + 1
+        ),
 
-        "forecasts": {
+        'SARIMA': forecasts['SARIMA'],
 
-            "SARIMA": sarima_forecast,
+        'Prophet': forecasts['Prophet'],
 
-            "Prophet": prophet_forecast,
+        'XGBoost': forecasts['XGBoost'],
 
-            "XGBoost": xgboost_forecast,
+        'LSTM': forecasts['LSTM']
 
-            "LSTM": lstm_forecast
+    })
 
-        }
+    st.subheader(
+        "Forecast Comparison"
+    )
 
-    }
+    fig3, ax3 = plt.subplots(
+        figsize=(14,5)
+    )
+
+    ax3.plot(
+        forecast_df['Day'],
+        forecast_df['SARIMA'],
+        label='SARIMA'
+    )
+
+    ax3.plot(
+        forecast_df['Day'],
+        forecast_df['Prophet'],
+        label='Prophet'
+    )
+
+    ax3.plot(
+        forecast_df['Day'],
+        forecast_df['XGBoost'],
+        label='XGBoost'
+    )
+
+    ax3.plot(
+        forecast_df['Day'],
+        forecast_df['LSTM'],
+        label='LSTM'
+    )
+
+    ax3.legend()
+
+    ax3.grid(True)
+
+    st.pyplot(fig3)
+
+    # ----------------------------------
+    # FORECAST TABLE
+    # ----------------------------------
+
+    st.subheader(
+        "Forecast Data"
+    )
+
+    st.dataframe(
+        forecast_df,
+        use_container_width=True
+    )
