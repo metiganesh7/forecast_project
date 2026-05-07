@@ -6,4 +6,5 @@ prophet
 xgboost
 statsmodels
 scikit-learn
+tensorflow
 streamlit-option-menu
