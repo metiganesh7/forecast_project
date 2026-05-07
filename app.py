@@ -3,31 +3,28 @@ import pandas as pd
 import requests
 import matplotlib.pyplot as plt
 
-# -----------------------------------
-# Page Configuration
-# -----------------------------------
+# ----------------------------------------
+# PAGE CONFIGURATION
+# ----------------------------------------
 
 st.set_page_config(
-
-    page_title="Sales Forecasting Dashboard",
-
+    page_title="Time Series Forecast Dashboard",
     page_icon="📈",
-
     layout="wide"
 )
 
-# -----------------------------------
-# Load Dataset
-# -----------------------------------
+# ----------------------------------------
+# LOAD DATASET
+# ----------------------------------------
 
 df = pd.read_csv("Forecasting.csv")
 
-# Convert all column names to lowercase
+# Convert column names to lowercase
 df.columns = df.columns.str.lower()
 
-# -----------------------------------
-# Required Columns Check
-# -----------------------------------
+# ----------------------------------------
+# CHECK REQUIRED COLUMNS
+# ----------------------------------------
 
 required_columns = ['state', 'date', 'total']
 
@@ -35,209 +32,298 @@ for col in required_columns:
 
     if col not in df.columns:
 
-        st.error(f"Missing column: {col}")
+        st.error(f"Missing column in dataset: {col}")
 
         st.stop()
 
-# -----------------------------------
-# Convert Date Column
-# -----------------------------------
+# ----------------------------------------
+# DATE CONVERSION
+# ----------------------------------------
 
-df['date'] = pd.to_datetime(df['date'])
+df['date'] = pd.to_datetime(
+    df['date'],
+    errors='coerce'
+)
 
-# -----------------------------------
-# Get Unique States
-# -----------------------------------
+# Remove invalid dates
+df = df.dropna(subset=['date'])
+
+# ----------------------------------------
+# SORT DATA
+# ----------------------------------------
+
+df = df.sort_values('date')
+
+# ----------------------------------------
+# GET STATES
+# ----------------------------------------
 
 states = sorted(df['state'].unique())
 
-# -----------------------------------
-# Dashboard Title
-# -----------------------------------
+# ----------------------------------------
+# TITLE
+# ----------------------------------------
 
 st.title("📈 Time Series Forecasting Dashboard")
 
 st.markdown("---")
 
-# -----------------------------------
-# Sidebar
-# -----------------------------------
+# ----------------------------------------
+# SIDEBAR
+# ----------------------------------------
 
 st.sidebar.header("Forecast Settings")
 
 selected_state = st.sidebar.selectbox(
-
-    "Select State",
-
+    "Select Indian State",
     states
-
 )
 
-generate = st.sidebar.button("Generate Forecast")
+generate_forecast = st.sidebar.button(
+    "Generate Forecast"
+)
 
-# -----------------------------------
-# Main Description
-# -----------------------------------
+# ----------------------------------------
+# PROJECT DESCRIPTION
+# ----------------------------------------
 
-st.subheader("Sales Forecasting using XGBoost + FastAPI")
+st.subheader(
+    "Sales Forecasting using XGBoost + FastAPI"
+)
 
 st.write(
-
     """
     This dashboard predicts future sales for Indian states
     using machine learning forecasting models.
     """
 )
 
-# -----------------------------------
-# Historical Data
-# -----------------------------------
+# ----------------------------------------
+# FILTER STATE DATA
+# ----------------------------------------
 
-state_data = df[df['state'] == selected_state]
+state_data = df[
+    df['state'] == selected_state
+]
 
-st.subheader(f"Historical Sales Data - {selected_state}")
+# ----------------------------------------
+# HISTORICAL DATA
+# ----------------------------------------
 
-# Historical Chart
-st.line_chart(
-
-    state_data.set_index('date')['total']
-
+st.subheader(
+    f"Historical Sales Data - {selected_state}"
 )
 
-# -----------------------------------
-# Generate Forecast
-# -----------------------------------
+historical_df = state_data[
+    ['date', 'total']
+].copy()
 
-if generate:
+historical_df = historical_df.set_index('date')
+
+st.line_chart(
+    historical_df['total']
+)
+
+# ----------------------------------------
+# SHOW HISTORICAL TABLE
+# ----------------------------------------
+
+with st.expander(
+    "View Historical Data"
+):
+
+    st.dataframe(
+        historical_df,
+        use_container_width=True
+    )
+
+# ----------------------------------------
+# FORECAST SECTION
+# ----------------------------------------
+
+if generate_forecast:
 
     try:
 
+        # ----------------------------------------
         # API URL
-        url = f"http://127.0.0.1:8000/forecast/{selected_state}"
+        # ----------------------------------------
 
-        # API Request
+        url = (
+            f"http://127.0.0.1:8000/"
+            f"forecast/{selected_state}"
+        )
+
+        # ----------------------------------------
+        # API REQUEST
+        # ----------------------------------------
+
         response = requests.get(url)
 
-        # Convert to JSON
-        data = response.json()
+        # ----------------------------------------
+        # CHECK STATUS
+        # ----------------------------------------
 
-        # Forecast Values
-        forecast = data['forecast']
+        if response.status_code != 200:
 
-        # Forecast DataFrame
-        forecast_df = pd.DataFrame({
+            st.error(
+                "Failed to get forecast from API"
+            )
 
-            "Day": range(1, len(forecast)+1),
+        else:
 
-            "Forecast Sales": forecast
+            # ----------------------------------------
+            # JSON RESPONSE
+            # ----------------------------------------
 
-        })
+            data = response.json()
 
-        # Success Message
-        st.success(f"Forecast generated for {selected_state}")
+            forecast = data['forecast']
 
-        st.markdown("---")
+            # ----------------------------------------
+            # FORECAST DATAFRAME
+            # ----------------------------------------
 
-        # -----------------------------------
-        # KPI Metrics
-        # -----------------------------------
+            forecast_df = pd.DataFrame({
 
-        col1, col2, col3 = st.columns(3)
+                "Day": range(
+                    1,
+                    len(forecast)+1
+                ),
 
-        col1.metric(
+                "Forecast Sales": forecast
 
-            "Forecast Days",
+            })
 
-            len(forecast)
+            # ----------------------------------------
+            # SUCCESS MESSAGE
+            # ----------------------------------------
 
-        )
+            st.success(
+                f"Forecast generated for "
+                f"{selected_state}"
+            )
 
-        col2.metric(
+            st.markdown("---")
 
-            "Average Forecast",
+            # ----------------------------------------
+            # KPI METRICS
+            # ----------------------------------------
 
-            round(forecast_df["Forecast Sales"].mean(), 2)
+            col1, col2, col3 = st.columns(3)
 
-        )
+            col1.metric(
+                "Forecast Days",
+                len(forecast)
+            )
 
-        col3.metric(
+            col2.metric(
+                "Average Forecast",
+                round(
+                    forecast_df[
+                        "Forecast Sales"
+                    ].mean(),
+                    2
+                )
+            )
 
-            "Maximum Forecast",
+            col3.metric(
+                "Maximum Forecast",
+                round(
+                    forecast_df[
+                        "Forecast Sales"
+                    ].max(),
+                    2
+                )
+            )
 
-            round(forecast_df["Forecast Sales"].max(), 2)
+            st.markdown("---")
 
-        )
+            # ----------------------------------------
+            # FORECAST TABLE
+            # ----------------------------------------
 
-        st.markdown("---")
+            st.subheader(
+                "Forecast Table"
+            )
 
-        # -----------------------------------
-        # Forecast Table
-        # -----------------------------------
+            st.dataframe(
+                forecast_df,
+                use_container_width=True
+            )
 
-        st.subheader("Forecast Table")
+            # ----------------------------------------
+            # FORECAST CHART
+            # ----------------------------------------
 
-        st.dataframe(
+            st.subheader(
+                "Forecast Visualization"
+            )
 
-            forecast_df,
+            fig, ax = plt.subplots(
+                figsize=(12,5)
+            )
 
-            use_container_width=True
+            ax.plot(
+                forecast_df["Day"],
+                forecast_df[
+                    "Forecast Sales"
+                ],
+                marker='o'
+            )
 
-        )
+            ax.set_xlabel(
+                "Forecast Days"
+            )
 
-        # -----------------------------------
-        # Forecast Visualization
-        # -----------------------------------
+            ax.set_ylabel(
+                "Sales Forecast"
+            )
 
-        st.subheader("Forecast Visualization")
+            ax.set_title(
+                f"56-Day Forecast "
+                f"for {selected_state}"
+            )
 
-        fig, ax = plt.subplots(figsize=(12,5))
+            ax.grid(True)
 
-        ax.plot(
+            st.pyplot(fig)
 
-            forecast_df["Day"],
+            # ----------------------------------------
+            # DOWNLOAD CSV
+            # ----------------------------------------
 
-            forecast_df["Forecast Sales"],
+            csv = forecast_df.to_csv(
+                index=False
+            )
 
-            marker='o'
+            st.download_button(
 
-        )
+                label="Download Forecast CSV",
 
-        ax.set_xlabel("Days")
+                data=csv,
 
-        ax.set_ylabel("Forecast Sales")
+                file_name=(
+                    f"{selected_state}"
+                    f"_forecast.csv"
+                ),
 
-        ax.set_title(
-
-            f"56-Day Forecast for {selected_state}"
-
-        )
-
-        ax.grid(True)
-
-        st.pyplot(fig)
-
-        # -----------------------------------
-        # Download CSV
-        # -----------------------------------
-
-        csv = forecast_df.to_csv(index=False)
-
-        st.download_button(
-
-            label="Download Forecast CSV",
-
-            data=csv,
-
-            file_name=f"{selected_state}_forecast.csv",
-
-            mime="text/csv"
-
-        )
+                mime="text/csv"
+            )
 
     except Exception as e:
 
-        st.error(f"API Error: {e}")
+        st.error(
+            f"Forecast Error: {e}"
+        )
+
+# ----------------------------------------
+# DEFAULT MESSAGE
+# ----------------------------------------
 
 else:
 
-    st.info("Select a state and click Generate Forecast")
+    st.info(
+        "Select a state and click "
+        "'Generate Forecast'"
+    )
