@@ -3,9 +3,9 @@ import pandas as pd
 import requests
 import matplotlib.pyplot as plt
 
-# -------------------------------
+# -----------------------------------
 # Page Configuration
-# -------------------------------
+# -----------------------------------
 
 st.set_page_config(
 
@@ -16,23 +16,20 @@ st.set_page_config(
     layout="wide"
 )
 
-# -------------------------------
+# -----------------------------------
 # Load Dataset
-# -------------------------------
+# -----------------------------------
 
 df = pd.read_csv("Forecasting.csv")
 
-# Convert column names to lowercase
+# Convert all column names to lowercase
 df.columns = df.columns.str.lower()
 
-# Display columns for debugging
-st.write("Dataset Columns:", df.columns)
+# -----------------------------------
+# Required Columns Check
+# -----------------------------------
 
-# -------------------------------
-# Check Required Columns
-# -------------------------------
-
-required_columns = ['state', 'sales']
+required_columns = ['state', 'date', 'total']
 
 for col in required_columns:
 
@@ -42,23 +39,29 @@ for col in required_columns:
 
         st.stop()
 
-# -------------------------------
+# -----------------------------------
+# Convert Date Column
+# -----------------------------------
+
+df['date'] = pd.to_datetime(df['date'])
+
+# -----------------------------------
 # Get Unique States
-# -------------------------------
+# -----------------------------------
 
 states = sorted(df['state'].unique())
 
-# -------------------------------
+# -----------------------------------
 # Dashboard Title
-# -------------------------------
+# -----------------------------------
 
 st.title("📈 Time Series Forecasting Dashboard")
 
 st.markdown("---")
 
-# -------------------------------
+# -----------------------------------
 # Sidebar
-# -------------------------------
+# -----------------------------------
 
 st.sidebar.header("Forecast Settings")
 
@@ -72,9 +75,9 @@ selected_state = st.sidebar.selectbox(
 
 generate = st.sidebar.button("Generate Forecast")
 
-# -------------------------------
+# -----------------------------------
 # Main Description
-# -------------------------------
+# -----------------------------------
 
 st.subheader("Sales Forecasting using XGBoost + FastAPI")
 
@@ -86,37 +89,42 @@ st.write(
     """
 )
 
-# -------------------------------
+# -----------------------------------
 # Historical Data
-# -------------------------------
+# -----------------------------------
 
 state_data = df[df['state'] == selected_state]
 
 st.subheader(f"Historical Sales Data - {selected_state}")
 
-st.line_chart(state_data['sales'])
+# Historical Chart
+st.line_chart(
 
-# -------------------------------
+    state_data.set_index('date')['total']
+
+)
+
+# -----------------------------------
 # Generate Forecast
-# -------------------------------
+# -----------------------------------
 
 if generate:
 
     try:
 
-        # FastAPI URL
+        # API URL
         url = f"http://127.0.0.1:8000/forecast/{selected_state}"
 
         # API Request
         response = requests.get(url)
 
-        # JSON Response
+        # Convert to JSON
         data = response.json()
 
-        # Forecast values
+        # Forecast Values
         forecast = data['forecast']
 
-        # Forecast dataframe
+        # Forecast DataFrame
         forecast_df = pd.DataFrame({
 
             "Day": range(1, len(forecast)+1),
@@ -125,11 +133,14 @@ if generate:
 
         })
 
+        # Success Message
         st.success(f"Forecast generated for {selected_state}")
 
-        # -------------------------------
+        st.markdown("---")
+
+        # -----------------------------------
         # KPI Metrics
-        # -------------------------------
+        # -----------------------------------
 
         col1, col2, col3 = st.columns(3)
 
@@ -159,9 +170,9 @@ if generate:
 
         st.markdown("---")
 
-        # -------------------------------
+        # -----------------------------------
         # Forecast Table
-        # -------------------------------
+        # -----------------------------------
 
         st.subheader("Forecast Table")
 
@@ -173,9 +184,9 @@ if generate:
 
         )
 
-        # -------------------------------
-        # Forecast Graph
-        # -------------------------------
+        # -----------------------------------
+        # Forecast Visualization
+        # -----------------------------------
 
         st.subheader("Forecast Visualization")
 
@@ -193,7 +204,7 @@ if generate:
 
         ax.set_xlabel("Days")
 
-        ax.set_ylabel("Sales")
+        ax.set_ylabel("Forecast Sales")
 
         ax.set_title(
 
@@ -205,9 +216,9 @@ if generate:
 
         st.pyplot(fig)
 
-        # -------------------------------
+        # -----------------------------------
         # Download CSV
-        # -------------------------------
+        # -----------------------------------
 
         csv = forecast_df.to_csv(index=False)
 
