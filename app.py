@@ -20,7 +20,7 @@ warnings.filterwarnings('ignore')
 # PAGE CONFIG
 # =========================================================
 st.set_page_config(
-    page_title="CipherForecast AI",
+    page_title="SalesVision AI",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
