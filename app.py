@@ -1,62 +1,139 @@
-from fastapi import FastAPI
-import joblib
+import streamlit as st
 import pandas as pd
-import numpy as np
+import requests
+import matplotlib.pyplot as plt
 
-# Initialize FastAPI
-app = FastAPI(
-    title="Time Series Forecasting API",
-    description="Sales Forecasting Backend using XGBoost",
-    version="1.0"
+# Page configuration
+st.set_page_config(
+    page_title="Time Series Forecasting Dashboard",
+    page_icon="📈",
+    layout="wide"
 )
 
-# Load trained model
-model = joblib.load("best_model.pkl")
+# Title
+st.title("📈 Time Series Forecasting Dashboard")
 
+st.markdown("---")
 
-# Home Route
-@app.get("/")
-def home():
+# Sidebar
+st.sidebar.header("Forecast Settings")
 
-    return {
-        "message": "Forecast API Running Successfully"
-    }
+# State selection
+state = st.sidebar.selectbox(
+    "Select State",
+    [
+        "Karnataka",
+        "Tamil Nadu",
+        "Kerala",
+        "Delhi",
+        "Maharashtra"
+    ]
+)
 
+# Forecast button
+generate = st.sidebar.button("Generate Forecast")
 
-# Forecast Route
-@app.get("/forecast/{state}")
-def forecast(state: str):
+# Main content
+st.subheader("Sales Forecasting using XGBoost + FastAPI")
 
-    # Sample input features
-    sample_data = pd.DataFrame({
+st.write(
+    """
+    This dashboard predicts future sales for different states
+    using machine learning forecasting models.
+    """
+)
 
-        'lag_1': [200],
-        'lag_7': [180],
-        'lag_30': [150],
-        'rolling_mean_7': [190],
-        'rolling_std_7': [12],
-        'day_of_week': [2],
-        'month': [5],
-        'holiday_flag': [0]
+# Generate forecast
+if generate:
+
+    # API URL
+    url = f"http://127.0.0.1:8000/forecast/{state}"
+
+    # Request prediction
+    response = requests.get(url)
+
+    # Convert response to JSON
+    data = response.json()
+
+    # Extract forecast
+    forecast = data["forecast"]
+
+    # Create dataframe
+    forecast_df = pd.DataFrame({
+
+        "Day": range(1, len(forecast)+1),
+
+        "Forecast Sales": forecast
 
     })
 
-    # Predict next value
-    prediction = model.predict(sample_data)
+    # Display success message
+    st.success(f"Forecast generated for {state}")
 
-    # Generate dummy 56-day forecast
-    future_forecast = [
-        float(prediction[0] + np.random.randint(-10, 10))
-        for i in range(56)
-    ]
+    # KPI Metrics
+    col1, col2, col3 = st.columns(3)
 
-    return {
+    col1.metric(
+        "Forecast Days",
+        len(forecast)
+    )
 
-        "state": state,
-        "model": "XGBoost",
+    col2.metric(
+        "Average Sales",
+        round(forecast_df["Forecast Sales"].mean(), 2)
+    )
 
-        "forecast_days": 56,
+    col3.metric(
+        "Maximum Sales",
+        round(forecast_df["Forecast Sales"].max(), 2)
+    )
 
-        "forecast": future_forecast
+    st.markdown("---")
 
-    }
+    # Forecast table
+    st.subheader("Forecast Data")
+
+    st.dataframe(
+        forecast_df,
+        use_container_width=True
+    )
+
+    # Forecast chart
+    st.subheader("Forecast Visualization")
+
+    fig, ax = plt.subplots(figsize=(12,5))
+
+    ax.plot(
+        forecast_df["Day"],
+        forecast_df["Forecast Sales"],
+        marker='o'
+    )
+
+    ax.set_xlabel("Days")
+
+    ax.set_ylabel("Sales")
+
+    ax.set_title(f"56-Day Sales Forecast for {state}")
+
+    ax.grid(True)
+
+    st.pyplot(fig)
+
+    # Download CSV
+    csv = forecast_df.to_csv(index=False)
+
+    st.download_button(
+
+        label="Download Forecast CSV",
+
+        data=csv,
+
+        file_name=f"{state}_forecast.csv",
+
+        mime="text/csv"
+
+    )
+
+else:
+
+    st.info("Select a state and click Generate Forecast")
