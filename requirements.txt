@@ -3,9 +3,7 @@ numpy
 matplotlib
 scikit-learn
 statsmodels
-prophet
 xgboost
-tensorflow
 fastapi
 uvicorn
 streamlit
