@@ -3,144 +3,229 @@ import pandas as pd
 import requests
 import matplotlib.pyplot as plt
 
-# Page Config
+# -------------------------------
+# Page Configuration
+# -------------------------------
+
 st.set_page_config(
+
     page_title="Sales Forecasting Dashboard",
+
     page_icon="📈",
+
     layout="wide"
 )
 
+# -------------------------------
 # Load Dataset
+# -------------------------------
+
 df = pd.read_csv("Forecasting.csv")
 
-# Get unique states from dataset
-states = sorted(df['State'].unique())
+# Convert column names to lowercase
+df.columns = df.columns.str.lower()
 
+# Display columns for debugging
+st.write("Dataset Columns:", df.columns)
+
+# -------------------------------
+# Check Required Columns
+# -------------------------------
+
+required_columns = ['state', 'sales']
+
+for col in required_columns:
+
+    if col not in df.columns:
+
+        st.error(f"Missing column: {col}")
+
+        st.stop()
+
+# -------------------------------
+# Get Unique States
+# -------------------------------
+
+states = sorted(df['state'].unique())
+
+# -------------------------------
 # Dashboard Title
-st.title("📈 Sales Forecasting Dashboard")
+# -------------------------------
+
+st.title("📈 Time Series Forecasting Dashboard")
 
 st.markdown("---")
 
+# -------------------------------
 # Sidebar
+# -------------------------------
+
 st.sidebar.header("Forecast Settings")
 
-# Dynamic state selection
 selected_state = st.sidebar.selectbox(
+
     "Select State",
+
     states
+
 )
 
-# Forecast button
 generate = st.sidebar.button("Generate Forecast")
 
-# Main description
-st.subheader("Time Series Forecasting using XGBoost + FastAPI")
+# -------------------------------
+# Main Description
+# -------------------------------
+
+st.subheader("Sales Forecasting using XGBoost + FastAPI")
 
 st.write(
+
     """
     This dashboard predicts future sales for Indian states
     using machine learning forecasting models.
     """
 )
 
-# Show state-wise historical data
-state_data = df[df['State'] == selected_state]
+# -------------------------------
+# Historical Data
+# -------------------------------
+
+state_data = df[df['state'] == selected_state]
 
 st.subheader(f"Historical Sales Data - {selected_state}")
 
-st.line_chart(state_data['Sales'])
+st.line_chart(state_data['sales'])
 
-# Generate forecast
+# -------------------------------
+# Generate Forecast
+# -------------------------------
+
 if generate:
 
-    # FastAPI URL
-    url = f"http://127.0.0.1:8000/forecast/{selected_state}"
+    try:
 
-    # API request
-    response = requests.get(url)
+        # FastAPI URL
+        url = f"http://127.0.0.1:8000/forecast/{selected_state}"
 
-    # JSON response
-    data = response.json()
+        # API Request
+        response = requests.get(url)
 
-    # Forecast values
-    forecast = data['forecast']
+        # JSON Response
+        data = response.json()
 
-    # Forecast dataframe
-    forecast_df = pd.DataFrame({
+        # Forecast values
+        forecast = data['forecast']
 
-        "Day": range(1, len(forecast)+1),
+        # Forecast dataframe
+        forecast_df = pd.DataFrame({
 
-        "Forecast Sales": forecast
+            "Day": range(1, len(forecast)+1),
 
-    })
+            "Forecast Sales": forecast
 
-    st.success(f"Forecast generated for {selected_state}")
+        })
 
-    # KPI Metrics
-    col1, col2, col3 = st.columns(3)
+        st.success(f"Forecast generated for {selected_state}")
 
-    col1.metric(
-        "Forecast Days",
-        len(forecast)
-    )
+        # -------------------------------
+        # KPI Metrics
+        # -------------------------------
 
-    col2.metric(
-        "Average Forecast",
-        round(forecast_df["Forecast Sales"].mean(), 2)
-    )
+        col1, col2, col3 = st.columns(3)
 
-    col3.metric(
-        "Maximum Forecast",
-        round(forecast_df["Forecast Sales"].max(), 2)
-    )
+        col1.metric(
 
-    st.markdown("---")
+            "Forecast Days",
 
-    # Forecast table
-    st.subheader("Forecast Table")
+            len(forecast)
 
-    st.dataframe(
-        forecast_df,
-        use_container_width=True
-    )
+        )
 
-    # Forecast graph
-    st.subheader("Forecast Visualization")
+        col2.metric(
 
-    fig, ax = plt.subplots(figsize=(12,5))
+            "Average Forecast",
 
-    ax.plot(
-        forecast_df["Day"],
-        forecast_df["Forecast Sales"],
-        marker='o'
-    )
+            round(forecast_df["Forecast Sales"].mean(), 2)
 
-    ax.set_xlabel("Days")
+        )
 
-    ax.set_ylabel("Sales")
+        col3.metric(
 
-    ax.set_title(
-        f"56-Day Forecast for {selected_state}"
-    )
+            "Maximum Forecast",
 
-    ax.grid(True)
+            round(forecast_df["Forecast Sales"].max(), 2)
 
-    st.pyplot(fig)
+        )
 
-    # Download CSV
-    csv = forecast_df.to_csv(index=False)
+        st.markdown("---")
 
-    st.download_button(
+        # -------------------------------
+        # Forecast Table
+        # -------------------------------
 
-        label="Download Forecast CSV",
+        st.subheader("Forecast Table")
 
-        data=csv,
+        st.dataframe(
 
-        file_name=f"{selected_state}_forecast.csv",
+            forecast_df,
 
-        mime="text/csv"
+            use_container_width=True
 
-    )
+        )
+
+        # -------------------------------
+        # Forecast Graph
+        # -------------------------------
+
+        st.subheader("Forecast Visualization")
+
+        fig, ax = plt.subplots(figsize=(12,5))
+
+        ax.plot(
+
+            forecast_df["Day"],
+
+            forecast_df["Forecast Sales"],
+
+            marker='o'
+
+        )
+
+        ax.set_xlabel("Days")
+
+        ax.set_ylabel("Sales")
+
+        ax.set_title(
+
+            f"56-Day Forecast for {selected_state}"
+
+        )
+
+        ax.grid(True)
+
+        st.pyplot(fig)
+
+        # -------------------------------
+        # Download CSV
+        # -------------------------------
+
+        csv = forecast_df.to_csv(index=False)
+
+        st.download_button(
+
+            label="Download Forecast CSV",
+
+            data=csv,
+
+            file_name=f"{selected_state}_forecast.csv",
+
+            mime="text/csv"
+
+        )
+
+    except Exception as e:
+
+        st.error(f"API Error: {e}")
 
 else:
 
