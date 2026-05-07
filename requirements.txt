@@ -2,9 +2,9 @@ streamlit
 pandas
 numpy
 plotly
-scikit-learn
+prophet
 xgboost
 statsmodels
-prophet
-joblib
-openpyxl
+scikit-learn
+tensorflow
+streamlit-option-menu
