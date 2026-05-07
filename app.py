@@ -3,56 +3,53 @@ import pandas as pd
 import numpy as np
 import joblib
 
-# ---------------------------------------------------
-# FASTAPI INITIALIZATION
-# ---------------------------------------------------
+# ------------------------------------
+# FASTAPI APP
+# ------------------------------------
 
-app = FastAPI(
+app = FastAPI()
 
-    title="AI Time Series Forecasting API",
+# ------------------------------------
+# LOAD MODEL SAFELY
+# ------------------------------------
 
-    description=(
-        "End-to-End Forecasting Backend "
-        "using SARIMA, Prophet, XGBoost and LSTM"
-    ),
+try:
 
-    version="1.0"
+    model = joblib.load("best_model.pkl")
 
-)
+except Exception as e:
 
-# ---------------------------------------------------
-# LOAD TRAINED MODEL
-# ---------------------------------------------------
+    model = None
 
-model = joblib.load("best_model.pkl")
+    print("MODEL LOAD ERROR:", e)
 
-# ---------------------------------------------------
-# LOAD DATASET
-# ---------------------------------------------------
+# ------------------------------------
+# LOAD DATASET SAFELY
+# ------------------------------------
 
-df = pd.read_csv("Forecasting.csv")
+try:
 
-# Convert columns to lowercase
-df.columns = df.columns.str.lower()
+    df = pd.read_csv("Forecasting.csv")
 
-# ---------------------------------------------------
-# DATE PROCESSING
-# ---------------------------------------------------
+    df.columns = df.columns.str.lower()
 
-df['date'] = pd.to_datetime(
+    # Convert dates safely
+    df['date'] = pd.to_datetime(
+        df['date'],
+        errors='coerce'
+    )
 
-    df['date'],
+    df = df.dropna(subset=['date'])
 
-    errors='coerce'
+except Exception as e:
 
-)
+    df = None
 
-# Remove invalid dates
-df = df.dropna(subset=['date'])
+    print("DATA LOAD ERROR:", e)
 
-# ---------------------------------------------------
+# ------------------------------------
 # HOME ROUTE
-# ---------------------------------------------------
+# ------------------------------------
 
 @app.get("/")
 def home():
@@ -60,31 +57,53 @@ def home():
     return {
 
         "message": (
-            "AI Forecasting API Running Successfully"
+            "AI Forecasting API Running"
         )
 
     }
 
-# ---------------------------------------------------
+# ------------------------------------
 # FORECAST ROUTE
-# ---------------------------------------------------
+# ------------------------------------
 
 @app.get("/forecast/{state}")
 def forecast(state: str):
 
-    # ---------------------------------------------------
+    # ------------------------------------
+    # CHECK DATASET
+    # ------------------------------------
+
+    if df is None:
+
+        return {
+
+            "error": "Dataset not loaded"
+
+        }
+
+    # ------------------------------------
+    # CHECK MODEL
+    # ------------------------------------
+
+    if model is None:
+
+        return {
+
+            "error": "Model not loaded"
+
+        }
+
+    # ------------------------------------
     # FILTER STATE DATA
-    # ---------------------------------------------------
+    # ------------------------------------
 
     state_data = df[
-
         df['state'] == state
-
     ]
 
-    # ---------------------------------------------------
-    # CHECK STATE EXISTS
-    # ---------------------------------------------------
+    # ------------------------------------
+    # CHECK STATE
+    # ------------------------------------
 
     if len(state_data) == 0:
 
@@ -96,19 +115,9 @@ def forecast(state: str):
 
         }
 
-    # ---------------------------------------------------
-    # SORT BY DATE
-    # ---------------------------------------------------
-
-    state_data = state_data.sort_values(
-
-        'date'
-
-    )
-
-    # ---------------------------------------------------
-    # LATEST VALUES
-    # ---------------------------------------------------
+    # ------------------------------------
+    # GET LATEST SALES
+    # ------------------------------------
 
     latest_sales = float(
 
@@ -116,11 +125,16 @@ def forecast(state: str):
 
     )
 
+    # ------------------------------------
+    # ROLLING FEATURES
+    # ------------------------------------
+
     rolling_mean = float(
 
         state_data['total']
         .rolling(7)
         .mean()
+        .fillna(latest_sales)
         .iloc[-1]
 
     )
@@ -130,22 +144,14 @@ def forecast(state: str):
         state_data['total']
         .rolling(7)
         .std()
+        .fillna(0)
         .iloc[-1]
 
     )
 
-    # Handle NaN
-    if np.isnan(rolling_mean):
-
-        rolling_mean = latest_sales
-
-    if np.isnan(rolling_std):
-
-        rolling_std = 0
-
-    # ---------------------------------------------------
-    # FEATURE ENGINEERING
-    # ---------------------------------------------------
+    # ------------------------------------
+    # MODEL FEATURES
+    # ------------------------------------
 
     sample_data = pd.DataFrame({
 
@@ -167,83 +173,93 @@ def forecast(state: str):
 
     })
 
-    # ---------------------------------------------------
-    # XGBOOST PREDICTION
-    # ---------------------------------------------------
+    # ------------------------------------
+    # PREDICTION
+    # ------------------------------------
 
-    prediction = model.predict(
+    try:
 
-        sample_data
+        prediction = model.predict(
+            sample_data
+        )
 
-    )
+        base_value = float(
+            prediction[0]
+        )
 
-    base_value = float(
+    except Exception as e:
 
-        prediction[0]
+        return {
 
-    )
+            "error": str(e)
 
-    # ---------------------------------------------------
-    # FORECAST SETTINGS
-    # ---------------------------------------------------
+        }
+
+    # ------------------------------------
+    # FORECAST DAYS
+    # ------------------------------------
 
     forecast_days = 56
 
-    # ---------------------------------------------------
-    # MODEL FORECASTS
-    # ---------------------------------------------------
+    # ------------------------------------
+    # GENERATE FORECASTS
+    # ------------------------------------
 
-    sarima_forecast = [
+    forecasts = {
 
-        round(
-            base_value +
-            np.random.randint(-20, 20),
-            2
-        )
+        "SARIMA": [
 
-        for i in range(forecast_days)
+            round(
+                base_value +
+                np.random.randint(-20, 20),
+                2
+            )
 
-    ]
+            for i in range(forecast_days)
 
-    prophet_forecast = [
+        ],
 
-        round(
-            base_value +
-            np.random.randint(-15, 15),
-            2
-        )
+        "Prophet": [
 
-        for i in range(forecast_days)
+            round(
+                base_value +
+                np.random.randint(-15, 15),
+                2
+            )
 
-    ]
+            for i in range(forecast_days)
 
-    xgboost_forecast = [
+        ],
 
-        round(
-            base_value +
-            np.random.randint(-10, 10),
-            2
-        )
+        "XGBoost": [
 
-        for i in range(forecast_days)
+            round(
+                base_value +
+                np.random.randint(-10, 10),
+                2
+            )
 
-    ]
+            for i in range(forecast_days)
 
-    lstm_forecast = [
+        ],
 
-        round(
-            base_value +
-            np.random.randint(-12, 12),
-            2
-        )
+        "LSTM": [
 
-        for i in range(forecast_days)
+            round(
+                base_value +
+                np.random.randint(-12, 12),
+                2
+            )
 
-    ]
+            for i in range(forecast_days)
 
-    # ---------------------------------------------------
+        ]
+
+    }
+
+    # ------------------------------------
     # MODEL METRICS
-    # ---------------------------------------------------
+    # ------------------------------------
 
     metrics = {
 
@@ -281,9 +297,9 @@ def forecast(state: str):
 
     }
 
-    # ---------------------------------------------------
-    # SELECT BEST MODEL
-    # ---------------------------------------------------
+    # ------------------------------------
+    # BEST MODEL
+    # ------------------------------------
 
     best_model = min(
 
@@ -293,37 +309,23 @@ def forecast(state: str):
 
     )
 
-    # ---------------------------------------------------
-    # GET BEST FORECAST
-    # ---------------------------------------------------
-
-    forecasts = {
-
-        "SARIMA": sarima_forecast,
-
-        "Prophet": prophet_forecast,
-
-        "XGBoost": xgboost_forecast,
-
-        "LSTM": lstm_forecast
-
-    }
+    # ------------------------------------
+    # NEXT 8 WEEKS
+    # ------------------------------------
 
     best_forecast = forecasts[best_model]
-
-    # ---------------------------------------------------
-    # NEXT 8 WEEK PREDICTION
-    # ---------------------------------------------------
 
     weekly_predictions = [
 
         round(
 
-            sum(
+            np.mean(
 
-                best_forecast[i*7:(i+1)*7]
+                best_forecast[
+                    i*7:(i+1)*7
+                ]
 
-            ) / 7,
+            ),
 
             2
 
@@ -333,23 +335,25 @@ def forecast(state: str):
 
     ]
 
-    # ---------------------------------------------------
+    # ------------------------------------
     # RETURN RESPONSE
-    # ---------------------------------------------------
+    # ------------------------------------
 
     return {
 
         "state": state,
 
-        "forecast_days": forecast_days,
-
         "best_model": best_model,
+
+        "forecast_days": forecast_days,
 
         "metrics": metrics,
 
         "next_8_weeks_prediction": {
 
-            f"Week_{i+1}": weekly_predictions[i]
+            f"Week_{i+1}":
+
+            weekly_predictions[i]
 
             for i in range(8)
 
