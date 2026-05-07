@@ -1,22 +1,33 @@
 from fastapi import FastAPI
 import joblib
 import pandas as pd
+import numpy as np
 
-app = FastAPI()
+# Initialize FastAPI
+app = FastAPI(
+    title="Time Series Forecasting API",
+    description="Sales Forecasting Backend using XGBoost",
+    version="1.0"
+)
 
 # Load trained model
 model = joblib.load("best_model.pkl")
 
+
+# Home Route
 @app.get("/")
 def home():
 
     return {
-        "message": "Forecast API Running"
+        "message": "Forecast API Running Successfully"
     }
 
-@app.get("/forecast")
-def forecast():
 
+# Forecast Route
+@app.get("/forecast/{state}")
+def forecast(state: str):
+
+    # Sample input features
     sample_data = pd.DataFrame({
 
         'lag_1': [200],
@@ -30,8 +41,22 @@ def forecast():
 
     })
 
+    # Predict next value
     prediction = model.predict(sample_data)
 
+    # Generate dummy 56-day forecast
+    future_forecast = [
+        float(prediction[0] + np.random.randint(-10, 10))
+        for i in range(56)
+    ]
+
     return {
-        "forecast": prediction.tolist()
+
+        "state": state,
+        "model": "XGBoost",
+
+        "forecast_days": 56,
+
+        "forecast": future_forecast
+
     }
