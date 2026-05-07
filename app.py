@@ -5,7 +5,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 from datetime import timedelta
-
 # MODELS
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from prophet import Prophet
