@@ -1,13 +1,10 @@
+streamlit
 pandas
 numpy
-matplotlib
+plotly
 scikit-learn
-statsmodels
 xgboost
-fastapi
-uvicorn
-streamlit
+statsmodels
+prophet
 joblib
 openpyxl
-holidays
-requests
