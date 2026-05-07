@@ -3,62 +3,69 @@ import pandas as pd
 import requests
 import matplotlib.pyplot as plt
 
-# Page configuration
+# Page Config
 st.set_page_config(
-    page_title="Time Series Forecasting Dashboard",
+    page_title="Sales Forecasting Dashboard",
     page_icon="📈",
     layout="wide"
 )
 
-# Title
-st.title("📈 Time Series Forecasting Dashboard")
+# Load Dataset
+df = pd.read_csv("Forecasting.csv")
+
+# Get unique states from dataset
+states = sorted(df['State'].unique())
+
+# Dashboard Title
+st.title("📈 Sales Forecasting Dashboard")
 
 st.markdown("---")
 
 # Sidebar
 st.sidebar.header("Forecast Settings")
 
-# State selection
-state = st.sidebar.selectbox(
+# Dynamic state selection
+selected_state = st.sidebar.selectbox(
     "Select State",
-    [
-        "Karnataka",
-        "Tamil Nadu",
-        "Kerala",
-        "Delhi",
-        "Maharashtra"
-    ]
+    states
 )
 
 # Forecast button
 generate = st.sidebar.button("Generate Forecast")
 
-# Main content
-st.subheader("Sales Forecasting using XGBoost + FastAPI")
+# Main description
+st.subheader("Time Series Forecasting using XGBoost + FastAPI")
 
 st.write(
     """
-    This dashboard predicts future sales for different states
+    This dashboard predicts future sales for Indian states
     using machine learning forecasting models.
     """
 )
 
+# Show state-wise historical data
+state_data = df[df['State'] == selected_state]
+
+st.subheader(f"Historical Sales Data - {selected_state}")
+
+st.line_chart(state_data['Sales'])
+
 # Generate forecast
 if generate:
 
-    # API URL
-    url = f"http://127.0.0.1:8000/forecast/{state}"
+    # FastAPI URL
+    url = f"http://127.0.0.1:8000/forecast/{selected_state}"
 
-    # Request prediction
+    # API request
     response = requests.get(url)
 
-    # Convert response to JSON
+    # JSON response
     data = response.json()
 
-    # Extract forecast
-    forecast = data["forecast"]
+    # Forecast values
+    forecast = data['forecast']
 
-    # Create dataframe
+    # Forecast dataframe
     forecast_df = pd.DataFrame({
 
         "Day": range(1, len(forecast)+1),
@@ -67,8 +74,7 @@ if generate:
 
     })
 
-    # Display success message
-    st.success(f"Forecast generated for {state}")
+    st.success(f"Forecast generated for {selected_state}")
 
     # KPI Metrics
     col1, col2, col3 = st.columns(3)
@@ -79,26 +85,26 @@ if generate:
     )
 
     col2.metric(
-        "Average Sales",
+        "Average Forecast",
         round(forecast_df["Forecast Sales"].mean(), 2)
     )
 
     col3.metric(
-        "Maximum Sales",
+        "Maximum Forecast",
         round(forecast_df["Forecast Sales"].max(), 2)
     )
 
     st.markdown("---")
 
     # Forecast table
-    st.subheader("Forecast Data")
+    st.subheader("Forecast Table")
 
     st.dataframe(
         forecast_df,
         use_container_width=True
     )
 
-    # Forecast chart
+    # Forecast graph
     st.subheader("Forecast Visualization")
 
     fig, ax = plt.subplots(figsize=(12,5))
@@ -113,7 +119,9 @@ if generate:
 
     ax.set_ylabel("Sales")
 
-    ax.set_title(f"56-Day Sales Forecast for {state}")
+    ax.set_title(
+        f"56-Day Forecast for {selected_state}"
+    )
 
     ax.grid(True)
 
@@ -128,7 +136,7 @@ if generate:
 
         data=csv,
 
-        file_name=f"{state}_forecast.csv",
+        file_name=f"{selected_state}_forecast.csv",
 
         mime="text/csv"
 
